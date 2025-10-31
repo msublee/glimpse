@@ -6,6 +6,8 @@ final class SearchViewModel: NSObject, ObservableObject {
     @Published var query: String = ""
     @Published private(set) var focusTick: Int = 0
     @Published var isSignedIn: Bool = false
+    @Published var canGoBack: Bool = false
+    @Published var canGoForward: Bool = false
 
     let webView: WKWebView
 
@@ -100,6 +102,23 @@ final class SearchViewModel: NSObject, ObservableObject {
             }
         }
     }
+
+    func goBack() {
+        if webView.canGoBack {
+            webView.goBack()
+        }
+    }
+
+    func goForward() {
+        if webView.canGoForward {
+            webView.goForward()
+        }
+    }
+
+    private func updateNavigationState() {
+        canGoBack = webView.canGoBack
+        canGoForward = webView.canGoForward
+    }
 }
 
 extension SearchViewModel: WKNavigationDelegate {
@@ -109,6 +128,13 @@ extension SearchViewModel: WKNavigationDelegate {
                 shouldFocusOnLoad = false
                 requestFocus()
             }
+            updateNavigationState()
+        }
+    }
+
+    nonisolated func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        Task { @MainActor in
+            updateNavigationState()
         }
     }
 }

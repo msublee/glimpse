@@ -72,6 +72,45 @@ struct SearchOverlayView: View {
     private var headerRow: some View {
         HStack(spacing: 12) {
             historyToggle
+
+            // Back button
+            Button {
+                viewModel.goBack()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .semibold))
+                    .padding(8)
+                    .foregroundStyle(
+                        viewModel.canGoBack
+                            ? GlimpsePalette.secondaryText
+                            : GlimpsePalette.tertiaryText
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(!viewModel.canGoBack)
+            .keyboardShortcut("[", modifiers: .command)
+            .accessibilityLabel("Go back")
+            .background(DragBlocker())
+
+            // Forward button
+            Button {
+                viewModel.goForward()
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .padding(8)
+                    .foregroundStyle(
+                        viewModel.canGoForward
+                            ? GlimpsePalette.secondaryText
+                            : GlimpsePalette.tertiaryText
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(!viewModel.canGoForward)
+            .keyboardShortcut("]", modifiers: .command)
+            .accessibilityLabel("Go forward")
+            .background(DragBlocker())
+
             searchFieldInput
 
             Button {

@@ -37,6 +37,8 @@ struct PreferencesView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 ShortcutRow(icon: "command", label: "Show/Hide Glimpse", shortcut: preferences.hotKey.displayString)
                                 Divider().background(GlimpsePalette.outline)
+                                ShortcutRow(icon: "chevron.left", label: "Navigate Back", shortcut: "⌘[")
+                                ShortcutRow(icon: "chevron.right", label: "Navigate Forward", shortcut: "⌘]")
                                 ShortcutRow(icon: "sidebar.left", label: "Toggle Recent Searches", shortcut: "⌘B")
                                 ShortcutRow(icon: "house", label: "Go to Home", shortcut: "⌘H")
                                 ShortcutRow(icon: "arrow.clockwise", label: "Reload Page", shortcut: "⌘R")

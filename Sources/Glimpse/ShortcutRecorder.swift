@@ -72,16 +72,16 @@ struct ShortcutRecorder: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(controller.isRecording ? "Press new shortcut…" : shortcut.displayString)
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color.white.opacity(0.92))
+                        .foregroundStyle(Color.primary)
                     Text(controller.isRecording ? "Press Esc to cancel" : "Current toggle shortcut")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.45))
+                        .foregroundStyle(GlimpsePalette.secondaryText)
                 }
                 Spacer()
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.35))
+                    .foregroundStyle(GlimpsePalette.tertiaryText)
                     .offset(x: -2)
             }
             .padding(.vertical, 12)
