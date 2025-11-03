@@ -8,7 +8,6 @@ final class PanelController {
     private let historyStore: SearchHistoryStore
     private var viewModel: SearchViewModel
     private var hostingController: OverlayHostingController<AnyView>?
-    private var previousActiveApp: NSRunningApplication?
 
     private func createHostingController() -> OverlayHostingController<AnyView> {
         let initialView = SearchOverlayView(viewModel: viewModel) { [weak self] in
@@ -64,9 +63,7 @@ final class PanelController {
     func show() {
         guard let window else { return }
 
-        // Save currently active app before taking focus
         if !window.isVisible {
-            previousActiveApp = NSWorkspace.shared.frontmostApplication
             positionWindow(window)
             window.alphaValue = 0
         }
@@ -88,7 +85,6 @@ final class PanelController {
     func hide() {
         guard let window, window.isVisible else {
             recreateViewModel()
-            restorePreviousApp()
             return
         }
 
@@ -105,25 +101,10 @@ final class PanelController {
                 // Recreate ViewModel to get clean WebView with empty history
                 self.recreateViewModel()
 
-                // Restore focus to previous app
-                self.restorePreviousApp()
+                // Hide app to let system restore previous app automatically
+                NSApp.hide(nil)
             }
         }
-    }
-
-    private func restorePreviousApp() {
-        // Return focus to the app that was active before we showed
-        if let previousApp = previousActiveApp,
-           previousApp.isTerminated == false {
-            // Activate with .activateIgnoringOtherApps to ensure window comes to front
-            previousApp.activate(options: [.activateIgnoringOtherApps])
-
-            // Small delay then bring window to front to ensure cursor state updates
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                previousApp.activate(options: [.activateIgnoringOtherApps])
-            }
-        }
-        previousActiveApp = nil
     }
 
     private func recreateViewModel() {

@@ -1,9 +1,11 @@
 import Foundation
 import WebKit
 
-/// Custom WKWebView that prevents automatic focus stealing
+/// Custom WKWebView that prevents automatic focus stealing and intercepts Escape key
 private class NonFocusingWebView: WKWebView {
     var allowsFocus: Bool = false
+    var onEscapeKey: (() -> Void)?
+    private var localEventMonitor: Any?
 
     override var acceptsFirstResponder: Bool {
         return allowsFocus
@@ -14,6 +16,29 @@ private class NonFocusingWebView: WKWebView {
             return false
         }
         return super.becomeFirstResponder()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+
+        Task { @MainActor in
+            // Remove old monitor
+            if let monitor = self.localEventMonitor {
+                NSEvent.removeMonitor(monitor)
+                self.localEventMonitor = nil
+            }
+
+            // Add local event monitor for Escape key when WebView is in window
+            if self.window != nil {
+                self.localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                    if event.keyCode == 53 { // Escape key
+                        self?.onEscapeKey?()
+                        return nil // Consume the event
+                    }
+                    return event
+                }
+            }
+        }
     }
 }
 
@@ -151,31 +176,9 @@ final class SearchViewModel: NSObject, ObservableObject {
     }
 
     func setupEscapeKeyHandler() {
-        // Inject JavaScript to listen for Escape key in WebView
-        let script = WKUserScript(
-            source: """
-                document.addEventListener('keydown', function(event) {
-                    if (event.key === 'Escape' || event.keyCode === 27) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        window.webkit.messageHandlers.escapePressed.postMessage('escape');
-                    }
-                }, true);
-            """,
-            injectionTime: .atDocumentEnd,
-            forMainFrameOnly: false
-        )
-        webView.configuration.userContentController.addUserScript(script)
-        webView.configuration.userContentController.add(self, name: "escapePressed")
-    }
-}
-
-extension SearchViewModel: WKScriptMessageHandler {
-    nonisolated func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        Task { @MainActor in
-            if message.name == "escapePressed" {
-                self.onEscapePressed?()
-            }
+        // Set up NSView-level Escape key handler
+        nonFocusingWebView?.onEscapeKey = { [weak self] in
+            self?.onEscapePressed?()
         }
     }
 }
