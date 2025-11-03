@@ -7,7 +7,7 @@ struct SearchOverlayView: View {
 
     @EnvironmentObject private var history: SearchHistoryStore
     @FocusState private var searchFieldFocused: Bool
-    @State private var showHistory: Bool = true
+    @State private var showHistory: Bool = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -56,15 +56,11 @@ struct SearchOverlayView: View {
         .frame(minWidth: 720, idealWidth: 2000, maxWidth: .infinity, minHeight: 480, idealHeight: 1300, maxHeight: .infinity)
         .onExitCommand { onDismiss() }
         .onAppear {
-            DispatchQueue.main.async {
-                searchFieldFocused = true
-                viewModel.checkLoginStatus()
-            }
+            searchFieldFocused = true
+            viewModel.checkLoginStatus()
         }
         .onChange(of: viewModel.focusTick) { _ in
-            DispatchQueue.main.async {
-                searchFieldFocused = true
-            }
+            searchFieldFocused = true
             viewModel.checkLoginStatus()
         }
     }
@@ -74,7 +70,7 @@ struct SearchOverlayView: View {
             historyToggle
 
             // Back button
-            Button {
+            HoverButton(isEnabled: viewModel.canGoBack) {
                 viewModel.goBack()
             } label: {
                 Image(systemName: "chevron.left")
@@ -86,14 +82,11 @@ struct SearchOverlayView: View {
                             : GlimpsePalette.tertiaryText
                     )
             }
-            .buttonStyle(.plain)
-            .disabled(!viewModel.canGoBack)
             .keyboardShortcut("[", modifiers: .command)
             .accessibilityLabel("Go back")
-            .background(DragBlocker())
 
             // Forward button
-            Button {
+            HoverButton(isEnabled: viewModel.canGoForward) {
                 viewModel.goForward()
             } label: {
                 Image(systemName: "chevron.right")
@@ -105,15 +98,12 @@ struct SearchOverlayView: View {
                             : GlimpsePalette.tertiaryText
                     )
             }
-            .buttonStyle(.plain)
-            .disabled(!viewModel.canGoForward)
             .keyboardShortcut("]", modifiers: .command)
             .accessibilityLabel("Go forward")
-            .background(DragBlocker())
 
             searchFieldInput
 
-            Button {
+            HoverButton(isEnabled: true) {
                 viewModel.navigateToHome()
             } label: {
                 Image(systemName: "house")
@@ -121,12 +111,10 @@ struct SearchOverlayView: View {
                     .padding(8)
                     .foregroundStyle(GlimpsePalette.secondaryText)
             }
-            .buttonStyle(.plain)
             .keyboardShortcut("h", modifiers: .command)
             .accessibilityLabel("Go to home")
-            .background(DragBlocker())
 
-            Button {
+            HoverButton(isEnabled: true) {
                 viewModel.reload()
             } label: {
                 Image(systemName: "arrow.clockwise")
@@ -134,10 +122,8 @@ struct SearchOverlayView: View {
                     .padding(8)
                     .foregroundStyle(GlimpsePalette.secondaryText)
             }
-            .buttonStyle(.plain)
             .keyboardShortcut("r", modifiers: .command)
             .accessibilityLabel("Reload page")
-            .background(DragBlocker())
 
             // Hidden button for Cmd+/ shortcut (toggle focus)
             Button {
@@ -271,7 +257,7 @@ struct SearchOverlayView: View {
     }
 
     private var historyToggle: some View {
-        Button {
+        HoverButton(isEnabled: true) {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                 showHistory.toggle()
             }
@@ -282,10 +268,8 @@ struct SearchOverlayView: View {
                 .padding(8)
                 .foregroundStyle(GlimpsePalette.secondaryText)
         }
-        .buttonStyle(.plain)
         .keyboardShortcut("b", modifiers: .command)
         .accessibilityLabel("Toggle recent searches sidebar")
-        .background(DragBlocker())
     }
 
     private var contentRow: some View {
@@ -428,11 +412,17 @@ private struct WebViewContainer: NSViewRepresentable {
     let webView: WKWebView
 
     func makeNSView(context: Context) -> WKWebView {
+        // Enable gestures - navigation policy will check session in delegate
         webView.allowsBackForwardNavigationGestures = true
+
+        // Prevent WebView from automatically becoming first responder
+        // This is handled by NonFocusingWebView's acceptsFirstResponder
         return webView
     }
 
-    func updateNSView(_ nsView: WKWebView, context: Context) {}
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        // Ensure WebView doesn't steal focus on updates
+    }
 }
 
 // Prevents window dragging when clicking on this view
@@ -446,5 +436,37 @@ private struct DragBlocker: NSViewRepresentable {
 
 private class DragBlockingView: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
+}
+
+// Chrome-style hover button with circular background
+private struct HoverButton<Label: View>: View {
+    let isEnabled: Bool
+    let action: () -> Void
+    let label: () -> Label
+
+    @State private var isHovered: Bool = false
+
+    init(isEnabled: Bool, action: @escaping () -> Void, @ViewBuilder label: @escaping () -> Label) {
+        self.isEnabled = isEnabled
+        self.action = action
+        self.label = label
+    }
+
+    var body: some View {
+        Button(action: action) {
+            label()
+                .background(
+                    Circle()
+                        .fill(Color.black.opacity(isHovered && isEnabled ? 0.06 : 0))
+                        .animation(.easeInOut(duration: 0.15), value: isHovered)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .background(DragBlocker())
+    }
 }
 

@@ -6,8 +6,10 @@ import QuartzCore
 final class PanelController {
     private var window: NSPanel?
     private let historyStore: SearchHistoryStore
-    private let viewModel: SearchViewModel
-    private lazy var hostingController: OverlayHostingController<AnyView> = {
+    private var viewModel: SearchViewModel
+    private var hostingController: OverlayHostingController<AnyView>?
+
+    private func createHostingController() -> OverlayHostingController<AnyView> {
         let initialView = SearchOverlayView(viewModel: viewModel) { [weak self] in
             self?.hide()
         }
@@ -17,7 +19,7 @@ final class PanelController {
             self?.hide()
         }
         return controller
-    }()
+    }
 
     var isVisible: Bool {
         window?.isVisible ?? false
@@ -34,6 +36,9 @@ final class PanelController {
         let panel = OverlayWindow(contentRect: NSRect(x: 0, y: 0, width: 2000, height: 1300))
         panel.alphaValue = 0
         panel.contentMinSize = NSSize(width: 720, height: 480)
+
+        // Create initial hosting controller
+        hostingController = createHostingController()
         panel.contentViewController = hostingController
 
         // Force the panel to maintain the specified size
@@ -62,12 +67,16 @@ final class PanelController {
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             window.animator().alphaValue = 1
         }
-        viewModel.requestFocus()
+
+        // Delay focus request to ensure SwiftUI view is ready after ViewModel recreation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.viewModel.requestFocus()
+        }
     }
 
     func hide() {
         guard let window, window.isVisible else {
-            viewModel.reset()
+            recreateViewModel()
             return
         }
 
@@ -80,8 +89,31 @@ final class PanelController {
                 guard let self, let panel else { return }
                 panel.orderOut(nil)
                 panel.alphaValue = 0
-                self.viewModel.reset()
+
+                // Recreate ViewModel to get clean WebView with empty history
+                self.recreateViewModel()
             }
+        }
+    }
+
+    private func recreateViewModel() {
+        // Save current window size
+        let currentSize = window?.frame.size ?? NSSize(width: 2000, height: 1300)
+
+        // Create new ViewModel (new WebView with empty history)
+        viewModel = SearchViewModel(historyStore: historyStore)
+
+        // Recreate hosting controller with new ViewModel
+        hostingController = createHostingController()
+
+        // Update window's content view controller
+        if let window = window {
+            window.contentViewController = hostingController
+
+            // Restore window size
+            var frame = window.frame
+            frame.size = currentSize
+            window.setFrame(frame, display: false)
         }
     }
 

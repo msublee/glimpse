@@ -1,6 +1,22 @@
 import Foundation
 import WebKit
 
+/// Custom WKWebView that prevents automatic focus stealing
+private class NonFocusingWebView: WKWebView {
+    var allowsFocus: Bool = false
+
+    override var acceptsFirstResponder: Bool {
+        return allowsFocus
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        guard allowsFocus else {
+            return false
+        }
+        return super.becomeFirstResponder()
+    }
+}
+
 @MainActor
 final class SearchViewModel: NSObject, ObservableObject {
     @Published var query: String = ""
@@ -10,6 +26,9 @@ final class SearchViewModel: NSObject, ObservableObject {
     @Published var canGoForward: Bool = false
 
     let webView: WKWebView
+    private var nonFocusingWebView: NonFocusingWebView? {
+        webView as? NonFocusingWebView
+    }
 
     private let historyStore: SearchHistoryStore
     private let engine: SearchEngine = .google
@@ -23,12 +42,14 @@ final class SearchViewModel: NSObject, ObservableObject {
         configuration.defaultWebpagePreferences.preferredContentMode = .desktop
         configuration.preferences.setValue(true, forKey: "developerExtrasEnabled")
 
-        webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        let customWebView = NonFocusingWebView(frame: .zero, configuration: configuration)
+        customWebView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+        webView = customWebView
 
         super.init()
 
         webView.navigationDelegate = self
+        webView.allowsBackForwardNavigationGestures = true
         clearContent()
     }
 
@@ -51,8 +72,10 @@ final class SearchViewModel: NSObject, ObservableObject {
     }
 
     func reset() {
+        // This is now only called for edge cases since we recreate ViewModel
         query = ""
-        clearContent()
+        canGoBack = false
+        canGoForward = false
     }
 
     func reload() {
@@ -74,6 +97,9 @@ final class SearchViewModel: NSObject, ObservableObject {
     }
 
     func focusWebViewSearchField() {
+        // Temporarily allow WebView to accept focus
+        nonFocusingWebView?.allowsFocus = true
+
         // Make WebView first responder
         if let window = webView.window {
             window.makeFirstResponder(webView)
@@ -88,6 +114,11 @@ final class SearchViewModel: NSObject, ObservableObject {
                     searchInput.click();
                 }
             """)
+        }
+
+        // Disable focus after a delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.nonFocusingWebView?.allowsFocus = false
         }
     }
 
@@ -104,15 +135,13 @@ final class SearchViewModel: NSObject, ObservableObject {
     }
 
     func goBack() {
-        if webView.canGoBack {
-            webView.goBack()
-        }
+        guard canGoBack else { return }
+        webView.goBack()
     }
 
     func goForward() {
-        if webView.canGoForward {
-            webView.goForward()
-        }
+        guard canGoForward else { return }
+        webView.goForward()
     }
 
     private func updateNavigationState() {
@@ -124,6 +153,15 @@ final class SearchViewModel: NSObject, ObservableObject {
 extension SearchViewModel: WKNavigationDelegate {
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         Task { @MainActor in
+            // Only blur if we're not allowing WebView focus (i.e., user didn't use Cmd+/)
+            if let nonFocusing = webView as? NonFocusingWebView, !nonFocusing.allowsFocus {
+                _ = try? await webView.evaluateJavaScript("""
+                    if (document.activeElement && document.activeElement.tagName !== 'BODY') {
+                        document.activeElement.blur();
+                    }
+                """)
+            }
+
             if shouldFocusOnLoad {
                 shouldFocusOnLoad = false
                 requestFocus()
