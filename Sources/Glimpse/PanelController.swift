@@ -29,6 +29,12 @@ final class PanelController {
     init(historyStore: SearchHistoryStore = .shared) {
         self.historyStore = historyStore
         self.viewModel = SearchViewModel(historyStore: historyStore)
+
+        // Setup escape key handler for initial ViewModel
+        self.viewModel.onEscapePressed = { [weak self] in
+            self?.hide()
+        }
+        self.viewModel.setupEscapeKeyHandler()
     }
 
     func prepareWindow() {
@@ -109,7 +115,13 @@ final class PanelController {
         // Return focus to the app that was active before we showed
         if let previousApp = previousActiveApp,
            previousApp.isTerminated == false {
-            previousApp.activate(options: [])
+            // Activate with .activateIgnoringOtherApps to ensure window comes to front
+            previousApp.activate(options: [.activateIgnoringOtherApps])
+
+            // Small delay then bring window to front to ensure cursor state updates
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                previousApp.activate(options: [.activateIgnoringOtherApps])
+            }
         }
         previousActiveApp = nil
     }
@@ -120,6 +132,12 @@ final class PanelController {
 
         // Create new ViewModel (new WebView with empty history)
         viewModel = SearchViewModel(historyStore: historyStore)
+
+        // Setup escape key handler for WebView
+        viewModel.onEscapePressed = { [weak self] in
+            self?.hide()
+        }
+        viewModel.setupEscapeKeyHandler()
 
         // Recreate hosting controller with new ViewModel
         hostingController = createHostingController()

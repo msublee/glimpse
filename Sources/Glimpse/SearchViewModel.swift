@@ -33,6 +33,7 @@ final class SearchViewModel: NSObject, ObservableObject {
     private let historyStore: SearchHistoryStore
     private let engine: SearchEngine = .google
     private var shouldFocusOnLoad: Bool = false
+    var onEscapePressed: (() -> Void)?
 
     init(historyStore: SearchHistoryStore) {
         self.historyStore = historyStore
@@ -147,6 +148,35 @@ final class SearchViewModel: NSObject, ObservableObject {
     private func updateNavigationState() {
         canGoBack = webView.canGoBack
         canGoForward = webView.canGoForward
+    }
+
+    func setupEscapeKeyHandler() {
+        // Inject JavaScript to listen for Escape key in WebView
+        let script = WKUserScript(
+            source: """
+                document.addEventListener('keydown', function(event) {
+                    if (event.key === 'Escape' || event.keyCode === 27) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        window.webkit.messageHandlers.escapePressed.postMessage('escape');
+                    }
+                }, true);
+            """,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: false
+        )
+        webView.configuration.userContentController.addUserScript(script)
+        webView.configuration.userContentController.add(self, name: "escapePressed")
+    }
+}
+
+extension SearchViewModel: WKScriptMessageHandler {
+    nonisolated func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        Task { @MainActor in
+            if message.name == "escapePressed" {
+                self.onEscapePressed?()
+            }
+        }
     }
 }
 
